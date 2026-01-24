@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from copy import copy
 from typing import Any, cast
 from collections.abc import Callable
+from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from vnpy.trader.constant import Interval, Direction, Offset
 from vnpy.trader.object import BarData, TickData, OrderData, TradeData
@@ -31,6 +33,7 @@ class CtaTemplate(ABC):
         self.inited: bool = False
         self.trading: bool = False
         self.pos: float = 0
+        self.scheduler: BackgroundScheduler | None = None
 
         # Copy a new variables list here to avoid duplicate insert when multiple
         # strategy instances are created with the same strategy class.
@@ -119,6 +122,12 @@ class CtaTemplate(ABC):
     def on_bar(self, bar: BarData) -> None:
         """
         Callback of new bar data update.
+        """
+        return
+
+    def on_timer(self, dt: datetime):
+        """
+        Callback of new heartbeat timer update.
         """
         return
 

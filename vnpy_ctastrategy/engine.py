@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import copy
 from glob import glob
 from concurrent.futures import Future
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from vnpy.event import Event, EventEngine
 from vnpy.trader.engine import BaseEngine, MainEngine, LogEngine
@@ -720,6 +721,9 @@ class CtaEngine(BaseEngine):
 
         self.call_strategy_func(strategy, strategy.on_start)
         strategy.trading = True
+        strategy.scheduler = BackgroundScheduler()
+        strategy.scheduler.add_job(lambda: strategy.on_timer(datetime.now()), 'cron', second='0')
+        strategy.scheduler.start()
 
         self.put_strategy_event(strategy)
 
@@ -736,6 +740,9 @@ class CtaEngine(BaseEngine):
 
         # Change trading status of strategy to False
         strategy.trading = False
+        if strategy.scheduler:
+            strategy.scheduler.shutdown()
+            strategy.scheduler = None
 
         # Cancel all orders of the strategy
         self.cancel_all(strategy)

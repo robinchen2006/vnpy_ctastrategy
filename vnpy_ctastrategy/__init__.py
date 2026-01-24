@@ -26,7 +26,7 @@ from pathlib import Path
 from vnpy.trader.app import BaseApp
 from vnpy.trader.constant import Direction
 from vnpy.trader.object import TickData, BarData, TradeData, OrderData
-from vnpy.trader.utility import BarGenerator, ArrayManager
+from vnpy.trader.utility import BarGenerator, TimerGenerator, ArrayManager
 
 from .base import APP_NAME, StopOrder
 from .engine import CtaEngine
@@ -46,6 +46,7 @@ __all__ = [
     "TradeData",
     "OrderData",
     "BarGenerator",
+    "TimerGenerator",
     "ArrayManager",
     "CtaStrategyApp",
 ]

@@ -10,7 +10,7 @@ from functools import lru_cache, partial
 import traceback
 
 import numpy as np
-from pandas import DataFrame, Series
+from pandas import DataFrame, Series, date_range
 from pandas.core.window import ExponentialMovingWindow
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -228,13 +228,26 @@ class BacktestingEngine:
         self.strategy.trading = True
         self.output(_("开始回放历史数据"))
 
+        first_data: BarData | TickData = self.history_data[0]
+        first_dt: datetime = first_data.datetime
+        for dt in date_range(
+            first_dt.replace(hour=0, minute=0, second=0),
+            first_dt,
+            freq="min"
+        ):
+            self.datetime = dt.to_pydatetime()
+            self.strategy.on_timer(self.datetime)
+
         total_size: int = len(self.history_data)
         batch_size: int = max(int(total_size / 10), 1)
 
         for ix, i in enumerate(range(0, total_size, batch_size)):
-            batch_data: list = self.history_data[i: i + batch_size]
+            batch_data: list[BarData | TickData] = self.history_data[i: i + batch_size]
             for data in batch_data:
                 try:
+                    while data.datetime - self.datetime >= timedelta(minutes=1):
+                        self.datetime += timedelta(minutes=1)
+                        self.strategy.on_timer(self.datetime)
                     func(data)
                 except Exception:
                     self.output(_("触发异常，回测终止"))
@@ -244,6 +257,16 @@ class BacktestingEngine:
             progress = min(ix / 10, 1)
             progress_bar: str = "=" * (ix + 1)
             self.output(_("回放进度：{} [{:.0%}]").format(progress_bar, progress))
+
+        last_data: BarData | TickData = self.history_data[-1]
+        last_dt: datetime = last_data.datetime
+        for dt in date_range(
+            last_dt,
+            last_dt.replace(hour=23, minute=59, second=59),
+            freq="min"
+        ):
+            self.datetime = dt.to_pydatetime()
+            self.strategy.on_timer(self.datetime)
 
         self.strategy.on_stop()
         self.output(_("历史数据回放结束"))
