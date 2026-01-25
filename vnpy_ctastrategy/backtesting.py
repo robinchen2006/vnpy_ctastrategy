@@ -360,6 +360,8 @@ class BacktestingEngine:
         ewm_sharpe: float = 0
         return_drawdown_ratio: float = 0
         rgr_ratio: float = 0
+        benchmark_return: float = 0
+        excess_return: float = 0
 
         # Check if balance is always positive
         positive_balance: bool = False
@@ -442,6 +444,24 @@ class BacktestingEngine:
             else:
                 return_drawdown_ratio = 0
 
+            # Calculate benchmark return using history first open and last close
+            if hasattr(self, "history_data") and self.history_data:
+                first_data = self.history_data[0]
+                last_data = self.history_data[-1]
+
+                start_open = getattr(first_data, "open_price", None)
+                if start_open is None:
+                    start_open = getattr(first_data, "last_price", None)
+
+                end_close = getattr(last_data, "close_price", None)
+                if end_close is None:
+                    end_close = getattr(last_data, "last_price", None)
+
+                if start_open and end_close:
+                    benchmark_return = (end_close / start_open - 1) * 100
+
+            excess_return = total_return - benchmark_return
+
             # Calculate GRR indicator
             cagr_value: float = annual_return / 100
 
@@ -484,6 +504,8 @@ class BacktestingEngine:
             self.output(_("结束资金：\t{:,.2f}").format(end_balance))
 
             self.output(_("总收益率：\t{:,.2f}%").format(total_return))
+            self.output(_("基准收益率：\t{:,.2f}%").format(benchmark_return))
+            self.output(_("超额收益率：\t{:,.2f}%").format(excess_return))
             self.output(_("年化收益：\t{:,.2f}%").format(annual_return))
             self.output(_("最大回撤: \t{:,.2f}").format(max_drawdown))
             self.output(_("百分比最大回撤: {:,.2f}%").format(max_ddpercent))
@@ -530,6 +552,8 @@ class BacktestingEngine:
             "total_trade_count": total_trade_count,
             "daily_trade_count": daily_trade_count,
             "total_return": total_return,
+            "benchmark_return": benchmark_return,
+            "excess_return": excess_return,
             "annual_return": annual_return,
             "daily_return": daily_return,
             "return_std": return_std,
