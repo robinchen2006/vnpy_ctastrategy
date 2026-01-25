@@ -1,5 +1,6 @@
 import importlib
 import traceback
+import sys
 from collections import defaultdict
 from pathlib import Path
 from types import ModuleType
@@ -804,6 +805,13 @@ class CtaEngine(BaseEngine):
         path2: Path = Path.cwd().joinpath("strategies")
         self.load_strategy_class_from_folder(path2, "strategies")
 
+        # go throught the subfolders of strategies folder
+        for folder in path2.iterdir():
+            if folder.is_dir() and "Strategy" in folder.name:
+                module_name: str = f"strategies.{folder.name}"
+                self.load_strategy_class_from_folder(folder, module_name)
+                print(f"Loaded strategies from subfolder: {folder},module: {module_name}")
+
     def load_strategy_class_from_folder(self, path: Path, module_name: str = "") -> None:
         """
         Load strategy class from certain folder.
@@ -824,6 +832,38 @@ class CtaEngine(BaseEngine):
 
             # 重载模块，确保如果策略文件中有任何修改，能够立即生效。
             importlib.reload(module)
+
+            # Also reload any modules that this module imported (attributes of
+            # type ModuleType), but only if the imported module file lives in
+            # the same directory as the strategy module. This avoids reloading
+            # unrelated global packages.
+            try:
+                module_file = getattr(module, "__file__", None)
+                module_dir = Path(module_file).parent if module_file else None
+
+                imported_modules: set[ModuleType] = set()
+                for attr in module.__dict__.values():
+                    if isinstance(attr, ModuleType):
+                        m = sys.modules.get(getattr(attr, "__name__", ""))
+                        if not m or m is module:
+                            continue
+
+                        m_file = getattr(m, "__file__", None)
+                        # Only reload if both have file paths and share the same dir
+                        if m_file and module_dir and Path(m_file).parent == module_dir:
+                            imported_modules.add(m)
+
+                for m in imported_modules:
+                    try:
+                        importlib.reload(m)
+                    except Exception:
+                        self.write_log(
+                            _("重载依赖模块{}失败：\n{}")
+                            .format(getattr(m, "__name__", str(m)), traceback.format_exc())
+                        )
+            except Exception:
+                # Ignore errors from scanning/reloading imported modules
+                pass
 
             for name in dir(module):
                 value = getattr(module, name)
