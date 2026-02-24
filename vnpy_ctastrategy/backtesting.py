@@ -60,6 +60,8 @@ class BacktestingEngine:
         self.slippage: float = 0
         self.size: float = 1
         self.pricetick: float = 0
+        self.min_commission: float = 0
+        self.stamp_duty: float = 0
         self.capital: int = 1_000_000
         self.risk_free: float = 0
         self.annual_days: int = 240
@@ -125,7 +127,9 @@ class BacktestingEngine:
         mode: BacktestingMode = BacktestingMode.BAR,
         risk_free: float = 0,
         annual_days: int = 240,
-        half_life: int = 120
+        half_life: int = 120,
+        min_commission: float = 0,
+        stamp_duty: float = 0
     ) -> None:
         """"""
         self.mode = mode
@@ -150,6 +154,8 @@ class BacktestingEngine:
         self.risk_free = risk_free
         self.annual_days = annual_days
         self.half_life = half_life
+        self.min_commission = min_commission
+        self.stamp_duty = stamp_duty
 
     def add_strategy(self, strategy_class: type[CtaTemplate], setting: dict) -> None:
         """"""
@@ -297,7 +303,9 @@ class BacktestingEngine:
                 start_pos,
                 self.size,
                 self.rate,
-                self.slippage
+                self.slippage,
+                self.min_commission,
+                self.stamp_duty
             )
 
             pre_close = daily_result.close_price
@@ -348,6 +356,8 @@ class BacktestingEngine:
         daily_commission: float = 0
         total_slippage: float = 0
         daily_slippage: float = 0
+        total_stamp_duty: float = 0
+        daily_stamp_duty: float = 0
         total_turnover: float = 0
         daily_turnover: float = 0
         total_trade_count: int = 0
@@ -415,6 +425,9 @@ class BacktestingEngine:
 
             total_slippage = df["slippage"].sum()
             daily_slippage = total_slippage / total_days
+
+            total_stamp_duty = df["stamp_duty"].sum()
+            daily_stamp_duty = total_stamp_duty / total_days
 
             total_turnover = df["turnover"].sum()
             daily_turnover = total_turnover / total_days
@@ -514,12 +527,14 @@ class BacktestingEngine:
             self.output(_("总盈亏：\t{:,.2f}").format(total_net_pnl))
             self.output(_("总手续费：\t{:,.2f}").format(total_commission))
             self.output(_("总滑点：\t{:,.2f}").format(total_slippage))
+            self.output(_("总印花税：\t{:,.2f}").format(total_stamp_duty))
             self.output(_("总成交金额：\t{:,.2f}").format(total_turnover))
             self.output(_("总成交笔数：\t{}").format(total_trade_count))
 
             self.output(_("日均盈亏：\t{:,.2f}").format(daily_net_pnl))
             self.output(_("日均手续费：\t{:,.2f}").format(daily_commission))
             self.output(_("日均滑点：\t{:,.2f}").format(daily_slippage))
+            self.output(_("日均印花税：\t{:,.2f}").format(daily_stamp_duty))
             self.output(_("日均成交金额：\t{:,.2f}").format(daily_turnover))
             self.output(_("日均成交笔数：\t{}").format(daily_trade_count))
 
@@ -547,6 +562,8 @@ class BacktestingEngine:
             "daily_commission": daily_commission,
             "total_slippage": total_slippage,
             "daily_slippage": daily_slippage,
+            "total_stamp_duty": total_stamp_duty,
+            "daily_stamp_duty": daily_stamp_duty,
             "total_turnover": total_turnover,
             "daily_turnover": daily_turnover,
             "total_trade_count": total_trade_count,
@@ -1118,6 +1135,7 @@ class DailyResult:
         self.turnover: float = 0
         self.commission: float = 0
         self.slippage: float = 0
+        self.stamp_duty: float = 0
 
         self.trading_pnl: float = 0
         self.holding_pnl: float = 0
@@ -1134,7 +1152,9 @@ class DailyResult:
         start_pos: float,
         size: float,
         rate: float,
-        slippage: float
+        slippage: float,
+        min_commission: float = 0,
+        stamp_duty: float = 0
     ) -> None:
         """"""
         # If no pre_close provided on the first day,
@@ -1167,11 +1187,18 @@ class DailyResult:
             self.slippage += trade.volume * size * slippage
 
             self.turnover += turnover
-            self.commission += turnover * rate
+
+            trade_commission: float = turnover * rate
+            if min_commission > 0:
+                trade_commission = max(trade_commission, min_commission)
+            self.commission += trade_commission
+
+            if trade.direction == Direction.SHORT:
+                self.stamp_duty += turnover * stamp_duty
 
         # Net pnl takes account of commission and slippage cost
         self.total_pnl = self.trading_pnl + self.holding_pnl
-        self.net_pnl = self.total_pnl - self.commission - self.slippage
+        self.net_pnl = self.total_pnl - self.commission - self.slippage - self.stamp_duty
 
 
 @lru_cache(maxsize=999)
@@ -1214,6 +1241,8 @@ def evaluate(
     capital: int,
     end: datetime,
     mode: BacktestingMode,
+    min_commission: float,
+    stamp_duty: float,
     setting: dict
 ) -> tuple:
     """
@@ -1231,7 +1260,9 @@ def evaluate(
         pricetick=pricetick,
         capital=capital,
         end=end,
-        mode=mode
+        mode=mode,
+        min_commission=min_commission,
+        stamp_duty=stamp_duty
     )
 
     engine.add_strategy(strategy_class, setting)
@@ -1261,7 +1292,9 @@ def wrap_evaluate(engine: BacktestingEngine, target_name: str) -> Callable:
         engine.pricetick,
         engine.capital,
         engine.end,
-        engine.mode
+        engine.mode,
+        engine.min_commission,
+        engine.stamp_duty
     )
     return func
 
