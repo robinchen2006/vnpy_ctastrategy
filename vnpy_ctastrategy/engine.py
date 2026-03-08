@@ -810,7 +810,6 @@ class CtaEngine(BaseEngine):
             if folder.is_dir() and "Strategy" in folder.name:
                 module_name: str = f"strategies.{folder.name}"
                 self.load_strategy_class_from_folder(folder, module_name)
-                print(f"Loaded strategies from subfolder: {folder},module: {module_name}")
 
     def load_strategy_class_from_folder(self, path: Path, module_name: str = "") -> None:
         """
