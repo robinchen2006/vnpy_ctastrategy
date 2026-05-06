@@ -1,9 +1,5 @@
 from collections import defaultdict
-from datetime import (
-    date as Date,
-    datetime,
-    timedelta
-)
+from datetime import date as Date, datetime, timedelta
 from typing import cast, Any
 from collections.abc import Callable
 from functools import lru_cache, partial
@@ -14,13 +10,7 @@ from pandas import DataFrame, Series, date_range
 from pandas.core.window import ExponentialMovingWindow
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from vnpy.trader.constant import (
-    Direction,
-    Offset,
-    Exchange,
-    Interval,
-    Status
-)
+from vnpy.trader.constant import Direction, Offset, Exchange, Interval, Status
 from vnpy.trader.database import get_database, BaseDatabase
 from vnpy.trader.object import OrderData, TradeData, BarData, TickData
 from vnpy.trader.utility import round_to, extract_vt_symbol
@@ -28,7 +18,7 @@ from vnpy.trader.optimize import (
     OptimizationSetting,
     check_optimization_setting,
     run_bf_optimization,
-    run_ga_optimization
+    run_ga_optimization,
 )
 
 from .base import (
@@ -37,7 +27,7 @@ from .base import (
     STOPORDER_PREFIX,
     StopOrder,
     StopOrderStatus,
-    INTERVAL_DELTA_MAP
+    INTERVAL_DELTA_MAP,
 )
 from .template import CtaTemplate
 from .locale import _
@@ -129,7 +119,7 @@ class BacktestingEngine:
         annual_days: int = 240,
         half_life: int = 120,
         min_commission: float = 0,
-        stamp_duty: float = 0
+        stamp_duty: float = 0,
     ) -> None:
         """"""
         self.mode = mode
@@ -175,7 +165,7 @@ class BacktestingEngine:
             self.output(_("起始日期必须小于结束日期"))
             return
 
-        self.history_data.clear()       # Clear previously loaded history data
+        self.history_data.clear()  # Clear previously loaded history data
 
         # Load 30 days of data each time and allow for progress update
         total_days: int = (self.end - self.start).days
@@ -195,19 +185,10 @@ class BacktestingEngine:
 
             if self.mode == BacktestingMode.BAR:
                 data: list[BarData] | list[TickData] = load_bar_data(
-                    self.symbol,
-                    self.exchange,
-                    self.interval,
-                    start,
-                    end
+                    self.symbol, self.exchange, self.interval, start, end
                 )
             else:
-                data = load_tick_data(
-                    self.symbol,
-                    self.exchange,
-                    start,
-                    end
-                )
+                data = load_tick_data(self.symbol, self.exchange, start, end)
 
             self.history_data.extend(data)
 
@@ -237,9 +218,7 @@ class BacktestingEngine:
         first_data: BarData | TickData = self.history_data[0]
         first_dt: datetime = first_data.datetime
         for dt in date_range(
-            first_dt.replace(hour=0, minute=0, second=0),
-            first_dt,
-            freq="min"
+            first_dt.replace(hour=0, minute=0, second=0), first_dt, freq="min"
         ):
             self.datetime = dt.to_pydatetime()
             self.strategy.on_timer(self.datetime)
@@ -248,7 +227,7 @@ class BacktestingEngine:
         batch_size: int = max(int(total_size / 10), 1)
 
         for ix, i in enumerate(range(0, total_size, batch_size)):
-            batch_data: list[BarData | TickData] = self.history_data[i: i + batch_size]
+            batch_data: list[BarData | TickData] = self.history_data[i : i + batch_size]
             for data in batch_data:
                 try:
                     while data.datetime - self.datetime >= timedelta(minutes=1):
@@ -267,9 +246,7 @@ class BacktestingEngine:
         last_data: BarData | TickData = self.history_data[-1]
         last_dt: datetime = last_data.datetime
         for dt in date_range(
-            last_dt,
-            last_dt.replace(hour=23, minute=59, second=59),
-            freq="min"
+            last_dt, last_dt.replace(hour=23, minute=59, second=59), freq="min"
         ):
             self.datetime = dt.to_pydatetime()
             self.strategy.on_timer(self.datetime)
@@ -305,7 +282,7 @@ class BacktestingEngine:
                 self.rate,
                 self.slippage,
                 self.min_commission,
-                self.stamp_duty
+                self.stamp_duty,
             )
 
             pre_close = daily_result.close_price
@@ -325,9 +302,7 @@ class BacktestingEngine:
         return self.daily_df
 
     def calculate_statistics(
-        self,
-        df: DataFrame | None = None,
-        output: bool = True
+        self, df: DataFrame | None = None, output: bool = True
     ) -> dict:
         """"""
         self.output(_("开始计算策略统计指标"))
@@ -387,7 +362,9 @@ class BacktestingEngine:
             x[x <= 0] = np.nan
             df["return"] = np.log(x).fillna(0)
 
-            df["highlevel"] = df["balance"].rolling(min_periods=1, window=len(df), center=False).max()
+            df["highlevel"] = (
+                df["balance"].rolling(min_periods=1, window=len(df), center=False).max()
+            )
             df["drawdown"] = df["balance"] - df["highlevel"]
             df["ddpercent"] = df["drawdown"] / df["highlevel"] * 100
 
@@ -442,12 +419,20 @@ class BacktestingEngine:
 
             if return_std:
                 daily_risk_free: float = self.risk_free / np.sqrt(self.annual_days)
-                sharpe_ratio = (daily_return - daily_risk_free) / return_std * np.sqrt(self.annual_days)
+                sharpe_ratio = (
+                    (daily_return - daily_risk_free)
+                    / return_std
+                    * np.sqrt(self.annual_days)
+                )
 
-                ewm_window: ExponentialMovingWindow = df["return"].ewm(halflife=self.half_life)
+                ewm_window: ExponentialMovingWindow = df["return"].ewm(
+                    halflife=self.half_life
+                )
                 ewm_mean: Series = ewm_window.mean() * 100
                 ewm_std: Series = ewm_window.std() * 100
-                ewm_sharpe = ((ewm_mean - daily_risk_free) / ewm_std).iloc[-1] * np.sqrt(self.annual_days)
+                ewm_sharpe = ((ewm_mean - daily_risk_free) / ewm_std).iloc[
+                    -1
+                ] * np.sqrt(self.annual_days)
             else:
                 sharpe_ratio = 0
                 ewm_sharpe = 0
@@ -485,7 +470,7 @@ class BacktestingEngine:
 
             returns_series: Series = df["return"]
             downside_diff: np.ndarray = np.minimum(returns_series.values, 0.0)
-            downside_std: float = np.sqrt(np.mean(downside_diff ** 2))
+            downside_std: float = np.sqrt(np.mean(downside_diff**2))
             annual_downside_risk: float = downside_std * np.sqrt(252)
             return_skew: float = cast(float, returns_series.skew())
             return_kurt: float = cast(float, returns_series.kurt())
@@ -500,7 +485,7 @@ class BacktestingEngine:
                 max_ddpercent,
                 return_skew,
                 return_kurt,
-                cvar_95
+                cvar_95,
             )
 
         # Output
@@ -603,23 +588,20 @@ class BacktestingEngine:
             rows=4,
             cols=1,
             subplot_titles=["Balance", "Drawdown", "Daily Pnl", "Pnl Distribution"],
-            vertical_spacing=0.06
+            vertical_spacing=0.06,
         )
 
         balance_line = go.Scatter(
-            x=df.index,
-            y=df["balance"],
-            mode="lines",
-            name="Balance"
+            x=df.index, y=df["balance"], mode="lines", name="Balance"
         )
 
         drawdown_scatter = go.Scatter(
             x=df.index,
             y=df["drawdown"],
             fillcolor="red",
-            fill='tozeroy',
+            fill="tozeroy",
             mode="lines",
-            name="Drawdown"
+            name="Drawdown",
         )
         pnl_bar = go.Bar(y=df["net_pnl"], name="Daily Pnl")
         pnl_histogram = go.Histogram(x=df["net_pnl"], nbinsx=100, name="Days")
@@ -636,7 +618,7 @@ class BacktestingEngine:
         self,
         optimization_setting: OptimizationSetting,
         output: bool = True,
-        max_workers: int | None = None
+        max_workers: int | None = None,
     ) -> list:
         """"""
         if not check_optimization_setting(optimization_setting):
@@ -648,7 +630,7 @@ class BacktestingEngine:
             optimization_setting,
             get_target_value,
             max_workers=max_workers,
-            output=self.output
+            output=self.output,
         )
 
         if output:
@@ -671,7 +653,7 @@ class BacktestingEngine:
         lambda_: int | None = None,
         cxpb: float = 0.95,
         mutpb: float | None = None,
-        indpb: float = 1.0
+        indpb: float = 1.0,
     ) -> list:
         """"""
         if not check_optimization_setting(optimization_setting):
@@ -690,7 +672,7 @@ class BacktestingEngine:
             cxpb=cxpb,
             mutpb=mutpb,
             indpb=indpb,
-            output=self.output
+            output=self.output,
         )
 
         if output:
@@ -849,7 +831,7 @@ class BacktestingEngine:
                 traded=stop_order.volume,
                 status=Status.ALLTRADED,
                 gateway_name=self.gateway_name,
-                datetime=self.datetime
+                datetime=self.datetime,
             )
 
             self.limit_orders[order.vt_orderid] = order
@@ -899,7 +881,7 @@ class BacktestingEngine:
         days: int,
         interval: Interval,
         callback: Callable,
-        use_database: bool
+        use_database: bool,
     ) -> list[BarData]:
         """"""
         self.callback = callback
@@ -910,16 +892,14 @@ class BacktestingEngine:
         symbol, exchange = extract_vt_symbol(vt_symbol)
 
         bars: list[BarData] = load_bar_data(
-            symbol,
-            exchange,
-            interval,
-            init_start,
-            init_end
+            symbol, exchange, interval, init_start, init_end
         )
 
         return bars
 
-    def load_tick(self, vt_symbol: str, days: int, callback: Callable) -> list[TickData]:
+    def load_tick(
+        self, vt_symbol: str, days: int, callback: Callable
+    ) -> list[TickData]:
         """"""
         self.callback = callback
 
@@ -928,12 +908,7 @@ class BacktestingEngine:
 
         symbol, exchange = extract_vt_symbol(vt_symbol)
 
-        ticks: list[TickData] = load_tick_data(
-            symbol,
-            exchange,
-            init_start,
-            init_end
-        )
+        ticks: list[TickData] = load_tick_data(symbol, exchange, init_start, init_end)
 
         return ticks
 
@@ -946,7 +921,7 @@ class BacktestingEngine:
         volume: float,
         stop: bool,
         lock: bool,
-        net: bool
+        net: bool,
     ) -> list:
         """"""
         price = round_to(price, self.pricetick)
@@ -957,11 +932,7 @@ class BacktestingEngine:
         return [vt_orderid]
 
     def send_stop_order(
-        self,
-        direction: Direction,
-        offset: Offset,
-        price: float,
-        volume: float
+        self, direction: Direction, offset: Offset, price: float, volume: float
     ) -> str:
         """"""
         self.stop_order_count += 1
@@ -983,11 +954,7 @@ class BacktestingEngine:
         return stop_order.stop_orderid
 
     def send_limit_order(
-        self,
-        direction: Direction,
-        offset: Offset,
-        price: float,
-        volume: float
+        self, direction: Direction, offset: Offset, price: float, volume: float
     ) -> str:
         """"""
         self.limit_order_count += 1
@@ -1002,7 +969,7 @@ class BacktestingEngine:
             volume=volume,
             status=Status.SUBMITTING,
             gateway_name=self.gateway_name,
-            datetime=self.datetime
+            datetime=self.datetime,
         )
 
         self.active_limit_orders[order.vt_orderid] = order
@@ -1154,7 +1121,7 @@ class DailyResult:
         rate: float,
         slippage: float,
         min_commission: float = 0,
-        stamp_duty: float = 0
+        stamp_duty: float = 0,
     ) -> None:
         """"""
         # If no pre_close provided on the first day,
@@ -1182,8 +1149,7 @@ class DailyResult:
             self.end_pos += pos_change
 
             turnover: float = trade.volume * size * trade.price
-            self.trading_pnl += pos_change * \
-                (self.close_price - trade.price) * size
+            self.trading_pnl += pos_change * (self.close_price - trade.price) * size
             self.slippage += trade.volume * size * slippage
 
             self.turnover += turnover
@@ -1198,16 +1164,14 @@ class DailyResult:
 
         # Net pnl takes account of commission and slippage cost
         self.total_pnl = self.trading_pnl + self.holding_pnl
-        self.net_pnl = self.total_pnl - self.commission - self.slippage - self.stamp_duty
+        self.net_pnl = (
+            self.total_pnl - self.commission - self.slippage - self.stamp_duty
+        )
 
 
 @lru_cache(maxsize=999)
 def load_bar_data(
-    symbol: str,
-    exchange: Exchange,
-    interval: Interval,
-    start: datetime,
-    end: datetime
+    symbol: str, exchange: Exchange, interval: Interval, start: datetime, end: datetime
 ) -> list[BarData]:
     """"""
     database: BaseDatabase = get_database()
@@ -1217,10 +1181,7 @@ def load_bar_data(
 
 @lru_cache(maxsize=999)
 def load_tick_data(
-    symbol: str,
-    exchange: Exchange,
-    start: datetime,
-    end: datetime
+    symbol: str, exchange: Exchange, start: datetime, end: datetime
 ) -> list[TickData]:
     """"""
     database: BaseDatabase = get_database()
@@ -1243,7 +1204,7 @@ def evaluate(
     mode: BacktestingMode,
     min_commission: float,
     stamp_duty: float,
-    setting: dict
+    setting: dict,
 ) -> tuple:
     """
     Function for running in multiprocessing.pool
@@ -1262,7 +1223,7 @@ def evaluate(
         end=end,
         mode=mode,
         min_commission=min_commission,
-        stamp_duty=stamp_duty
+        stamp_duty=stamp_duty,
     )
 
     engine.add_strategy(strategy_class, setting)
@@ -1294,7 +1255,7 @@ def wrap_evaluate(engine: BacktestingEngine, target_name: str) -> Callable:
         engine.end,
         engine.mode,
         engine.min_commission,
-        engine.stamp_duty
+        engine.stamp_duty,
     )
     return func
 
@@ -1306,7 +1267,7 @@ def calc_rgr_ratio(
     max_drawdown_percent: float,
     return_skew: float,
     return_kurt: float,
-    c_var: float
+    c_var: float,
 ) -> float:
     """"""
     # Apply log for diminishing marginal utility
@@ -1335,7 +1296,9 @@ def calc_rgr_ratio(
         combined_risk = 1e-9
 
     # Final RGR calculation
-    rgr_ratio: float = (gain * stability_return * skew_factor * kurt_factor) / combined_risk
+    rgr_ratio: float = (
+        gain * stability_return * skew_factor * kurt_factor
+    ) / combined_risk
 
     return rgr_ratio
 
