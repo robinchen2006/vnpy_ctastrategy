@@ -364,6 +364,8 @@ class BacktestingEngine:
         # Calculate daily result by iteration.
         pre_close: float = 0
         start_pos: float = 0
+        cashflow_callback = getattr(self.strategy, "get_backtesting_cashflows", None)
+        cashflows = cashflow_callback() if cashflow_callback else {}
 
         for daily_result in self.daily_results.values():
             daily_result.calculate_pnl(
@@ -376,6 +378,13 @@ class BacktestingEngine:
                 self.stamp_duty,
                 self.slippage_rate,
             )
+            # Optional strategy cash flows (e.g. ETF distributions). The strategy
+            # credits spendable cash during replay; settlement adds the same PnL
+            # to the report, once per calculation, without changing positions.
+            if cashflow_callback:
+                daily_result.dividend_pnl = float(cashflows.get(daily_result.date, 0.))
+                daily_result.total_pnl += daily_result.dividend_pnl
+                daily_result.net_pnl += daily_result.dividend_pnl
 
             pre_close = daily_result.close_price
             start_pos = daily_result.end_pos
